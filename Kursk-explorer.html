@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kursk | Prayer &amp; Outreach Map</title>
+<meta name="description" content="Shared Kursk prayer and visit planning map. Public viewing with leader-only updates.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+:root{--ink:#16233b;--mut:#6b7789;--line:#e3e8f0;--acc:#2563eb;--warn:#b45309}
+*{box-sizing:border-box}
+body{margin:0;padding:0;overflow:hidden;font:13px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+
+#map {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    background: #e8ecf1;
+}
+
+#panel {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 360px;
+    z-index: 1000;
+    background: #fff;
+    overflow-y: auto;
+    box-shadow: 2px 0 15px rgba(0,0,0,0.15);
+    transition: transform 0.3s ease;
+}
+#panel.hidden { transform: translateX(-100%); }
+
+/* FIXED: Menu button positioned to avoid zoom controls */
+#togglePanel {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1001;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    font-weight: 600;
+    font-size: 14px;
+    transition: left 0.3s ease;
+}
+#togglePanel.shifted { left: 375px; }
+#togglePanel:hover { background: #f8fafc; }
+
+header{padding:18px 20px;background:var(--ink);color:#fff}
+header h1{margin:0;font-size:17px;letter-spacing:.3px}
+header p{margin:4px 0 0;font-size:11px;color:#9fb0cc}
+section{padding:16px 20px;border-bottom:1px solid var(--line)}
+h2{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mut);margin:0 0 10px}
+label{display:block;font-size:11px;color:var(--mut);margin:10px 0 4px}
+select,button,input[type=file]{width:100%;padding:8px 9px;border:1px solid var(--line);
+  border-radius:6px;background:#fff;font:inherit;color:var(--ink)}
+button{cursor:pointer;transition:.15s}
+button:hover{background:#f1f5fb;border-color:#c7d3e6}
+.seg{display:flex;gap:4px;margin-top:6px}
+.seg button{flex:1;padding:7px 4px;font-size:11px}
+.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.banner{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;
+  padding:10px 12px;font-size:11px;border-radius:6px;margin:14px 20px 0}
+#big{font-size:42px;font-weight:700;line-height:1;letter-spacing:-1px}
+#scopeName{font-size:12px;color:var(--mut);margin-top:6px;min-height:18px}
+.tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.6px;
+  padding:2px 5px;border-radius:3px;background:#fef3c7;color:#92400e;vertical-align:middle}
+.bar{display:flex;height:9px;border-radius:5px;overflow:hidden;margin:14px 0 8px;background:#eef2f7}
+.bar span{display:block}
+.legendRow{display:flex;justify-content:space-between;font-size:11px;margin:5px 0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+td{padding:5px 0;border-bottom:1px solid #f0f3f8}
+td:last-child{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+tr.click{cursor:pointer}tr.click:hover{background:#f6f9ff}
+.housing{display:grid;grid-template-columns:1fr auto;gap:6px;font-size:11px;margin-top:10px}
+.housing b{font-variant-numeric:tabular-nums}
+.check{display:flex;align-items:center;gap:8px;font-size:12px;margin:7px 0;color:var(--ink)}
+.check input{width:auto;accent-color:var(--acc)}
+.row{display:flex;gap:6px;margin-top:10px}
+.row button{flex:1;font-size:11px}
+details{padding:16px 20px;font-size:11px}
+summary{cursor:pointer;font-weight:600;font-size:11px;color:var(--mut)}
+
+/* FIXED: Better pin styling with collision avoidance */
+.pin{display:flex;align-items:center;gap:5px;white-space:nowrap;transform:translate(-6px,-6px)}
+.pin .d{width:12px;height:12px;border-radius:50%;border:2px solid #fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.45);flex:none}
+.pin .t{font-size:10px;font-weight:600;background:rgba(255,255,255,.95);
+  padding:3px 6px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.18);
+  border:1px solid rgba(0,0,0,0.1);}
+.pin.dim{opacity:.18}
+.pin.unverified .d{border-style:dashed}
+
+/* UNIVERSITY LABELS: ALL CAPS & BOLD with better visibility */
+.pin.uni .t {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #000;
+    background: rgba(255,255,255,0.98);
+    border: 2px solid #333;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+
+/* MALL LABELS: BOLD, TITLE CASE */
+.pin.mall .t {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: none;
+    color: #9a3412;
+    background: rgba(255, 247, 237, 0.98);
+    border: 1px solid #f59e0b;
+    padding: 3px 6px;
+}
+
+/* DORM LABELS */
+.pin.dorm .t {
+    font-size: 10px;
+    font-weight: 700;
+    color: #333;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #999;
+    padding: 2px 5px;
+}
+
+/* RENTAL CLUSTER LABELS */
+.pin.rental .t {
+    font-size: 9px;
+    font-weight: 600;
+    color: #1e40af;
+    background: rgba(219, 234, 254, 0.95);
+    border: 1px solid #3b82f6;
+    padding: 2px 5px;
+}
+
+.leaflet-popup-content{font:12px/1.6 system-ui,sans-serif;min-width:230px}
+.popTitle{font-size:13px;font-weight:700;margin-bottom:4px}
+.popMeta{font-size:10px;color:var(--mut);margin-bottom:8px}
+
+/* FIXED: Status bar doesn't overlap map controls */
+#status{position:absolute;bottom:0;left:0;right:0;z-index:500;background:rgba(255,255,255,.95);
+  border-top:1px solid var(--line);padding:7px 14px;font-size:10px;color:var(--mut);
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* FIXED: Ensure zoom controls are always accessible */
+.leaflet-control-zoom {
+    z-index: 1002 !important;
+}
+
+@media(max-width:820px){
+    #panel { width: 100vw; }
+    #togglePanel.shifted { left: calc(100vw - 60px); }
+}
+</style>
+<link rel="stylesheet" href="./launch.css">
+</head>
+<body>
+
+<button id="togglePanel" class="shifted" aria-controls="panel" aria-expanded="true">Close panel</button>
+
+<aside id="panel">
+  <header>
+    <h1>Kursk prayer &amp; outreach</h1>
+    <p>A shared view of prayer, presence &amp; next steps</p>
+  </header>
+
+  <div class="banner">
+    <b>DATED PUBLISHED FIGURES.</b><br>
+    Enrollment: official 2025 monitoring (2024 data). Medical dorm occupancy: 1 Jan 2026.
+    Other housing counts are approximate planning estimates, marked with ~. Country counts are not verified.
+    Five campus locations and four malls have been compared with map sources.
+    Unverified dorm pins and schematic rental areas are not plotted.
+  </div>
+
+  <section>
+    <h2>01 · Scope</h2>
+    <label>University</label>
+    <select id="fUni"></select>
+    <label>Object type</label>
+    <select id="fKind">
+      <option value="all">All objects</option>
+      <option value="campus">Teaching / campus buildings</option>
+      <option value="dorm">Hostels / dormitories</option>
+      <option value="rental">Private rental clusters</option>
+    </select>
+    <label>Specific building / cluster</label>
+    <select id="fSite"></select>
+  </section>
+
+  <section>
+    <h2>02 · Population filter</h2>
+    <div class="seg" id="fPop">
+      <button data-v="all" class="on">Everyone</button>
+      <button data-v="fulltime">Full-time</button>
+      <button data-v="foreign">Foreign</button>
+    </div>
+    <label>Country breakdown (not verified)</label>
+    <select id="fNat"></select>
+    <div class="row">
+      <button id="reset">Reset filters</button>
+      <button id="fit">Fit to scope</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 · Result <span class="tag">PUBLISHED REFERENCE</span></h2>
+    <div id="big">—</div>
+    <div id="scopeName"></div>
+    <div id="dataExplanation" class="data-explanation" hidden></div>
+    <div class="bar" id="splitBar"></div>
+    <div id="splitLegend"></div>
+    <div class="housing" id="housing"></div>
+    <h2 style="margin-top:18px">Nationality breakdown</h2>
+    <table id="natTable"></table>
+  </section>
+
+  <section>
+    <h2>04 · Matching locations</h2>
+    <table id="siteTable"></table>
+  </section>
+
+  <section>
+    <h2>05 · Visible layers</h2>
+    <label class="check"><input type="checkbox" id="lCampus" checked> University campuses</label>
+    <label class="check"><input type="checkbox" id="lMalls" checked> Major malls & hubs</label>
+    <label class="check"><input type="checkbox" id="lDorm" checked> Hostels / dormitories</label>
+    <label class="check"><input type="checkbox" id="lRental" disabled> Rental estimates (not mapped)</label>
+    <label class="check"><input type="checkbox" id="lLabels" checked> Fine-print labels</label>
+    <label class="check"><input type="checkbox" id="lBlocks" disabled> Room blocks (not surveyed)</label>
+    <div class="row">
+      <button id="png">Export PNG</button>
+      <button id="csv">Export CSV</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>06 · Calibrate pins / edit data</summary>
+    <p style="color:var(--mut)">Select a location, then click the map to place it.
+      Coordinates are stored in your browser and override the defaults.</p>
+    <label>Location to calibrate</label>
+    <select id="calSite"></select>
+    <div class="row">
+      <button id="calOn">Start calibrating</button>
+      <button id="calOff">Stop</button>
+    </div>
+    <div class="row">
+      <button id="exportJson">Export data JSON</button>
+      <button id="resetCal">Reset pins</button>
+    </div>
+    <label>Import data JSON</label>
+    <input type="file" id="importJson" accept=".json">
+    <p style="color:var(--mut)">Edit the <code>UNIS</code> array at the top of this
+      file to replace modeled occupancy with verified registry figures.</p>
+  </details>
+</aside>
+
+<div id="map"></div>
+
+<div id="status">
+  <span id="tierInfo"></span>
+  <span id="countInfo"></span>
+</div>
+
+<script>
+// Address-level comparisons checked 2026-10-26. These are building locations,
+// not surveyed entrances. Population estimates are independently unverified.
+window.LOCATIONS = {
+ 'ksu-campus': {pos:[51.735498,36.191748],address:'33 Radishcheva St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_radishcheva_33/Z08Ydw5hTkEPQFtrfXtydHhqbA%3D%3D/inside/',addressSource:'https://kursksu.ru/offices/information/career_center'},
+ 'swsu-campus': {pos:[51.738332,36.148243],address:'94, 50 Let Oktyabrya St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_50_let_oktyabrya_94/Z08YdwNoS0EEQFtrfXtyeX9gZg%3D%3D/',addressSource:'https://swsu.ru/eng/'},
+ 'ksmu-campus': {pos:[51.749094,36.194883],address:'3 Karl Marx St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_karla_marksa_3/Z08Ydw5kQU0EQFtrfXt1eHxqYA%3D%3D/',addressSource:'https://kurskmed.com/struct/contacts'},
+ 'ksaa-campus': {pos:[51.765062,36.183044],address:'70 Karl Marx St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_karla_marksa_70/Z08Ydw9jSUEDQFtrfXt3dHxlZQ%3D%3D/inside/'},
+ 'fin-campus': {pos:[51.7242,36.1751],address:'3 Lomonosova St.',precision:'Approximate building location',source:'https://kursk.bebeshka.info/kursk/finansovyy-universitet-pri-pravitelstve-rossiyskoy-federatsii-kurskiy-filial-165726/',addressSource:'https://www.fa.ru/kursk/sveden/common/',comparisonSource:'https://yandex.com/maps/org/finansovy_universitet_pri_pravitelstve_rossiyskoy_federatsii_kurskiy_filial/1133263769/'},
+ 'mall1': {pos:[51.762130,36.184553],address:'68 Karl Marx St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_karla_marksa_68/Z08Ydw9kTEAEQFtrfXt3c31hbQ%3D%3D/inside/'},
+ 'mall2': {pos:[51.750768,36.190841],address:'10 Karl Marx St. (Europa 50)',source:'https://yandex.com/maps/8/kursk/house/ulitsa_karla_marksa_10/Z08Ydw5gQUEGQFtrfXt0cXtlYw%3D%3D/'},
+ 'mall3': {pos:[51.748956,36.191721],address:'6 Karl Marx St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_karla_marksa_6/Z08Ydw5hTkcGQFtrfXt1eXVmYQ%3D%3D/inside/'},
+ 'mall4': {pos:[51.737936,36.192377],address:'30 Lenina St.',source:'https://yandex.com/maps/8/kursk/house/ulitsa_lenina_30/Z08Ydw5iSkIAQFtrfXtydnVgYg%3D%3D/inside/'}
+};
+window.DORM_ADDRESSES = {
+ 'ksmu-d1':'3A Karl Marx St.', 'ksmu-d2':'3B Karl Marx St.',
+ 'ksmu-d3':'16 Yamskaya St.', 'ksmu-d4':'69G Karl Marx St.',
+ 'ksmu-d5':'2 Akhtyrskaya St.', 'ksmu-d6':'65B Karl Marx St.',
+ 'ksu-d2':'65 Gogolya St.', 'ksu-d3':'5 Kirova St.'
+};
+
+</script>
+<script>
+// Comparable reference: 2025 official monitoring, reporting 2024 data.
+// Bachelor / specialist / master programs only, all study modes.
+window.POPULATION = {
+ ksu:{total:10225,foreign:315,fullTime:5035,source:'https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=114'},
+ swsu:{total:11207,foreign:846,fullTime:5936,source:'https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=113'},
+ ksmu:{total:6650,foreign:1756,fullTime:6650,source:'https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=1786',update:'The 2025 self-assessment reports 6,546 bachelor/specialist/master students in 2025 (p. 13), and separately 1,762 international learners at 31 Dec 2025 (p. 48). The international learner scope is broader; these figures are not combined into a new percentage.',updateSource:'https://vc.kurskmed.com/sveden/files/rip/Otchet_o_rezulytatax_samoobsledovaniya_2025.pdf'},
+ ksaa:{total:4968,foreign:112,fullTime:1718,source:'https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=1674',update:'The 2025 self-assessment gives 7,765 learners across vocational and higher education at 1 Oct 2025 (p. 24). Its listed category counts sum to 7,806, so this broader total is not used in the comparable reference.',updateSource:'https://www.kursksau.ru/sveden/files/eij/Otchet_o_samoobsledovanii_2025_Kurskii_GAU.pdf'},
+ fin:{total:597,foreign:17,fullTime:306,source:'https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=10006960'}
+};
+window.DORM_POPULATION = Object.fromEntries([172,333,509,513,496,476].map((total,i)=>[
+ 'ksmu-d'+(i+1),{total,foreign:[0,0,0,496,496,0][i],source:'https://vc.kurskmed.com/sveden/files/rip/Otchet_o_rezulytatax_samoobsledovaniya_2025.pdf',date:'1 Jan 2026',scope:'All residents, including staff/families; international count covers students only. Table 55, printed p. 90.'}
+]));
+// Restored planning assumptions from the original map: [residents, international weight].
+// These are not measured occupancy. Published figures always take priority.
+window.PLANNING_ESTIMATES = {
+ 'ksu-d1':[500,130],'ksu-d2':[442,118],'ksu-d3':[405,96],
+ 'swsu-d1':[422,132],'swsu-d2':[384,120],'swsu-d3':[365,108],'swsu-d4':[338,96],
+ 'ksaa-d1':[248,42],'ksaa-d2':[229,38],'ksaa-d3':[210,35],'ksaa-d4':[190,32],'ksaa-d5':[171,29],
+ 'ksu-c1':[1200,62],'ksu-c2':[900,44],'swsu-c5':[3200,294],
+ 'ksmu-c2':[1000,550],'ksmu-c3':[600,338],'ksaa-c4':[700,24],'fin-c1':[480,12]
+};
+
+</script>
+<script>
+"use strict";
+
+// Building locations compared with map sources; see locations.js for citations.
+const UNIS = [
+ {id:"ksu",short:"KSU",name:"KURSK STATE UNIVERSITY",color:"#2563eb",address:"33 Radishcheva St.",campus:[51.735498,36.191748],dorms:[1,2,3]},
+ {id:"swsu",short:"SWSU",name:"SOUTH-WEST STATE UNIVERSITY",color:"#059669",address:"94, 50 Let Oktyabrya St.",campus:[51.738332,36.148243],dorms:[1,2,3,4]},
+ {id:"ksmu",short:"KSMU",name:"KURSK STATE MEDICAL UNIVERSITY",color:"#dc2626",address:"3 Karl Marx St.",campus:[51.749094,36.194883],dorms:[1,2,3,4,5,6]},
+ {id:"ksaa",short:"KSAU",name:"KURSK STATE AGRARIAN UNIVERSITY",color:"#d97706",address:"70 Karl Marx St.",campus:[51.765062,36.183044],dorms:[1,2,3,4,5]},
+ {id:"fin",short:"FinUn",name:"FINANCIAL UNIVERSITY (KURSK BRANCH)",color:"#7c3aed",address:"3 Lomonosova St.",campus:[51.7242,36.1751],dorms:[]}
+];
+UNIS.forEach(u=>{
+ Object.assign(u,window.POPULATION[u.id]);
+ u.profile=[];
+ u.dorms=u.dorms.map(n=>{const d=window.DORM_POPULATION[u.id+"-d"+n];return {n,cap:null,occ:d?.total??null,for:d?.foreign??null,pos:null,addr:window.DORM_ADDRESSES[u.id+"-d"+n] || "Exact address not verified",note:d?.scope || "Occupancy not verified"};});
+ u.rentals=({ksu:["c1","c2"],swsu:["c5"],ksmu:["c2","c3"],ksaa:["c4"],fin:["c1"]}[u.id]).map(id=>({id,n:null,for:null}));
+});
+
+// Building coordinates; source links are attached below from locations.js.
+const MALLS = [
+    {id:"mall1", name:"Mega GRINN", pos:[51.762130, 36.184553]},
+    {id:"mall2", name:"Europa 50", pos:[51.750768, 36.190841]},
+    {id:"mall3", name:"Central Park", pos:[51.748956, 36.191721]},
+    {id:"mall4", name:"Pushkinskiy", pos:[51.737936, 36.192377]}
+];
+
+// FIXED: Better positioned rental clusters
+const CLUSTERS = [
+ {id:"c1",name:"Radishcheva–Lenina",   pos:[51.7305, 36.1870], b:[[51.7280, 36.1840], [51.7330, 36.1900]]},
+ {id:"c2",name:"Karl Marx–Pushkin",    pos:[51.7270, 36.1750], b:[[51.7240, 36.1720], [51.7300, 36.1780]]},
+ {id:"c3",name:"Yamskaya–Clinical",    pos:[51.7290, 36.1740], b:[[51.7260, 36.1710], [51.7320, 36.1770]]},
+ {id:"c4",name:"Academic / North",     pos:[51.7220, 36.1650], b:[[51.7190, 36.1620], [51.7250, 36.1680]]},
+ {id:"c5",name:"Severo-Zapadny",       pos:[51.7020, 36.1180], b:[[51.6990, 36.1150], [51.7050, 36.1210]]}
+];
+
+const $ = id => document.getElementById(id);
+const fmt = n => Number.isFinite(n) ? Math.round(n).toLocaleString("en-US") : "Not verified";
+let overrides = {};
+// Legacy browser calibrations must not override the sourced launch locations.
+
+const state = {uni:"all",kind:"all",site:"all",pop:"all",nat:"all",tier:1,
+  layers:{campus:true,dorm:true,rental:false,labels:true,blocks:false,malls:true}};
+
+const NAMES = {};
+UNIS.forEach(u=>u.profile.forEach(p=>NAMES[p[0]]=p[1]));
+const posFor = (id,fallback) => overrides[id] || fallback;
+const uniOf = id => UNIS.find(u=>u.id===id);
+
+function apportion(n, profile){
+  const raw = profile.map(p=>({code:p[0], exact:n*p[2]}));
+  const out = {}; let left = Math.round(n);
+  raw.forEach(r=>{out[r.code]=Math.floor(r.exact); left-=Math.floor(r.exact);});
+  raw.sort((a,b)=>(b.exact%1)-(a.exact%1));
+  for(let i=0;i<left;i++) out[raw[i%raw.length].code]++;
+  return out;
+}
+
+const RECORDS = [];
+UNIS.forEach(u=>{
+  RECORDS.push({id:u.id+"-campus",uni:u.id,kind:"campus",name:u.name,
+    short:u.short,pos:posFor(u.id+"-campus",u.campus),address:u.address,
+    occ:u.total,foreign:u.foreign,cap:null,profile:u.profile});
+
+  u.dorms.forEach(d=>{
+    const id=u.id+"-d"+d.n;
+    RECORDS.push({id,uni:u.id,kind:"dorm",name:u.short+" · Hostel №"+d.n,
+      short:u.short,number:d.n,pos:posFor(id,d.pos),address:d.addr,
+      note:d.note||"Occupancy and nationality split are modeled.",
+      occ:d.occ,foreign:d.for,cap:d.cap,profile:u.profile});
+  });
+
+  (u.rentals||[]).forEach(r=>{
+    const c=CLUSTERS.find(c=>c.id===r.id), id=u.id+"-"+r.id;
+    RECORDS.push({id,uni:u.id,kind:"rental",name:u.short+" → "+c.name,
+      short:u.short,cluster:c.id,pos:c.pos,address:c.name+" · private apartments",
+      note:"Cluster boundary is schematic. Attributed share of university private renters.",
+      occ:r.n,foreign:r.for,cap:null,profile:u.profile});
+  });
+});
+RECORDS.forEach(r=>{
+  r.countries={};
+  const published=r.kind==="campus"?window.POPULATION[r.uni]:window.DORM_POPULATION[r.id];
+  r.fullTime=r.kind==="campus"?published.fullTime:null;
+  r.populationSource=published?.source || null;
+  r.populationDate=r.kind==="campus"?"2024 data / 2025 monitoring":published?.date || "Not verified";
+  r.populationScope=r.kind==="campus"?"Bachelor / specialist / master enrollment, all study modes; university-wide, not building attendance.":published?.scope || "No reliable occupancy figure found.";
+  r.populationUpdate=r.kind==="campus"?published.update:null;
+  r.populationUpdateSource=published?.updateSource;
+  r.estimated=false;
+  const location=window.LOCATIONS[r.id];
+  r.mapChecked=!!location;
+  if(location) Object.assign(r,location);
+  else {
+    r.pos=null;
+    r.address=window.DORM_ADDRESSES[r.id] || 'Exact address not verified';
+  }
+});
+// Restore missing housing counts as explicit assumptions, never replacing published data.
+UNIS.forEach(u=>{
+ const modeled=RECORDS.filter(r=>r.uni===u.id&&!r.populationSource&&window.PLANNING_ESTIMATES[r.id]);
+ const publishedResidents=RECORDS.filter(r=>r.uni===u.id&&r.kind!=="campus"&&r.populationSource);
+ const available=Math.max(0,u.foreign-publishedResidents.reduce((sum,r)=>sum+(r.foreign||0),0));
+ const weightTotal=modeled.reduce((sum,r)=>sum+window.PLANNING_ESTIMATES[r.id][1],0);
+ const scale=weightTotal?Math.min(1,available/weightTotal):0;
+ const allocations=modeled.map(r=>{const weight=window.PLANNING_ESTIMATES[r.id][1]*scale;return {r,exact:weight,value:Math.floor(weight)};});
+ let remainder=Math.round(weightTotal*scale)-allocations.reduce((sum,a)=>sum+a.value,0);
+ [...allocations].sort((a,b)=>(b.exact%1)-(a.exact%1)).forEach(a=>{if(remainder>0){a.value++;remainder--;}});
+ allocations.forEach(({r,value})=>{
+  r.occ=window.PLANNING_ESTIMATES[r.id][0];r.foreign=value;r.estimated=true;
+  r.populationDate="Planning estimate · not a dated census";
+  r.populationScope="Original map occupancy assumption, not independently verified. International estimates are reduced where needed to fit within the university reference after published dorm counts. Dates and student groups differ; use for planning only.";
+ });
+});
+MALLS.forEach(m=>Object.assign(m,window.LOCATIONS[m.id]));
+const byId = id => RECORDS.find(r=>r.id===id);
+
+function count(r){
+  let base;
+  if(state.nat!=="all") base = r.countries[state.nat]||0;
+  else if(state.pop==="foreign") base = r.foreign;
+  else if(state.pop==="fulltime") base = r.fullTime;
+  else base = r.occ;
+  
+  if(state.kind==="all" && state.site==="all" && r.kind!=="campus") return 0;
+  return base;
+}
+
+function scopeRecords(){
+  if(state.site!=="all"){ const r=byId(state.site); return r?[r]:[]; }
+  return RECORDS.filter(r=>(state.uni==="all"||r.uni===state.uni)
+                        &&(state.kind==="all"||r.kind===state.kind));
+}
+function baseRecords(){
+  return RECORDS.filter(r=>state.uni==="all"||r.uni===state.uni);
+}
+
+const map = L.map("map",{zoomControl:false}).setView([51.7245,36.1660],13);
+L.control.zoom({position:"topright"}).addTo(map);
+map.fitBounds(L.latLngBounds(RECORDS.filter(r=>r.mapChecked).map(r=>r.pos)).pad(.2));
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 18
+}).addTo(map);
+
+const gRental=L.layerGroup().addTo(map), gCampus=L.layerGroup().addTo(map),
+      gDorm=L.layerGroup().addTo(map), gBlocks=L.layerGroup().addTo(map),
+      gMalls=L.layerGroup().addTo(map);
+
+// FIXED: Better label positioning with offsets to avoid collisions
+function pin(pos, html, color, dim, unverified, type = '', offset = [0, 0]){
+  return L.marker(pos,{icon:L.divIcon({className:"",iconSize:[0,0],iconAnchor:[0,0],
+    html:`<div class="pin ${type} ${dim?"dim":""} ${unverified?"unverified":""}">
+      <span class="d" style="background:${color}"></span>
+      ${state.layers.labels?`<span class="t" style="transform:translate(${offset[0]}px,${offset[1]}px)">${html}</span>`:""}</div>`}),
+    keyboard:true});
+}
+
+function populationDetails(r){
+ const value=n=>(r.estimated&&Number.isFinite(n)?"~":"")+fmt(n);
+ return `<p class="popMeta">${r.populationDate}<br>${r.populationScope}</p>
+ ${r.estimated?'<span class="tag estimate-tag">PLANNING ESTIMATE</span>':'<span class="tag">PUBLISHED FIGURE</span>'}
+ <table><tr><td>${r.kind==="campus"?"Enrollment (all modes)":"All residents"}</td><td>${value(r.occ)}</td></tr>
+ <tr><td>${r.kind==="campus"?"International students":"International students resident"}</td><td>${value(r.foreign)}</td></tr>
+ ${r.kind==="campus"?`<tr><td>Full-time students</td><td>${fmt(r.fullTime)}</td></tr>`:""}</table>
+ ${r.populationSource?`<p><a href="${r.populationSource}" target="_blank" rel="noopener noreferrer">Published number source</a></p>`:""}
+ ${r.populationUpdate?`<p class="population-update">Newer report: ${r.populationUpdate}<br><a href="${r.populationUpdateSource}" target="_blank" rel="noopener noreferrer">Read newer report</a></p>`:""}`;
+}
+function popup(r){
+ return `<div class="popTitle">${r.name}</div><div class="popMeta">${r.address}</div>
+ <p>${r.mapChecked?`${r.precision || "Building location compared with map"}<br><a href="${r.source}" target="_blank" rel="noopener noreferrer">Map source</a>`:"Pin withheld: building location not verified."}</p>
+ ${populationDetails(r)}<button onclick="focusSite('${r.id}')">Focus this location</button>`;
+}
+
+function focusSite(id){
+  const r=byId(id); if(!r)return;
+  state.uni=r.uni; state.site=id; state.kind="all";
+  syncSelects(); render();
+  if(r.mapChecked)map.flyTo(r.pos,17,{duration:.8});
+  else $("tierInfo").textContent="Location not plotted: building coordinates need verification.";
+}
+window.focusSite=focusSite;
+
+function renderMap(){
+  [gRental,gCampus,gDorm,gBlocks,gMalls].forEach(g=>g.clearLayers());
+  const z=map.getZoom();
+  state.tier = z>=17?3 : z>=14?2 : 1;
+
+  if(state.layers.malls){
+    MALLS.forEach((m, i) => {
+      const label = state.tier >= 1 ? m.name : "";
+      // Offset labels to avoid overlap
+      const offsets = [[0, -15], [15, 0], [0, 15], [-15, 0]];
+      const offset = offsets[i % 4];
+      const m_pin = pin(m.pos, label, "#d97706", false, false, "mall", offset);
+      m_pin.bindPopup(`<b>${m.name}</b><br>${m.address}<br>Building location compared with map · 26 Oct 2026<br><a href="${m.source}" target="_blank" rel="noopener noreferrer">View on source map</a>`);
+      m_pin.addTo(gMalls);
+    });
+  }
+
+  if(state.layers.rental){
+    CLUSTERS.filter(c=>c.mapChecked).forEach(c=>{
+      const rs=RECORDS.filter(r=>r.kind==="rental"&&r.cluster===c.id);
+      const n=rs.reduce((s,r)=>s+count(r),0);
+      const active=rs.some(r=>scopeRecords().includes(r));
+      L.rectangle(c.b,{color:"#2563eb",weight:active?2:1,
+        fillColor:"#3b82f6",fillOpacity:active?.16:.05,
+        dashArray:active?null:"4 4"})
+        .bindPopup(`<b>${c.name}</b><br>Private-rental cluster · schematic boundary
+          <br>Filtered students: <b>${fmt(n)}</b>`)
+        .addTo(gRental);
+      if(state.layers.labels && n > 0)
+        pin(c.pos,`${c.name} · ${fmt(n)}`,"#3b82f6",!active,false,"rental",[0, -20]).addTo(gRental);
+    });
+  }
+
+  if(state.layers.campus){
+    RECORDS.filter(r=>r.kind==="campus").forEach((r, i) => {
+      const u=uniOf(r.uni), n=count(r);
+      const active=scopeRecords().includes(r);
+      const label=state.tier>=2?`${u.short} · ${fmt(n)}`:u.short;
+      // Offset university labels to avoid overlap
+      const offsets = [[0, -25], [20, -10], [-20, -10], [0, 20], [25, 0]];
+      const offset = offsets[i % 5];
+      const m=pin(r.pos,label,u.color,!active,!r.mapChecked,"uni",offset).addTo(gCampus);
+      m.bindPopup(popup(r));
+    });
+  }
+
+  if(state.layers.dorm && state.tier>=2){
+    RECORDS.filter(r=>r.kind==="dorm"&&r.mapChecked).forEach((r, i) => {
+      const u=uniOf(r.uni), n=count(r), active=scopeRecords().includes(r);
+      let label="H"+r.number;
+      if(state.tier>=3) label+=` · ${fmt(n)}`;
+      // Offset dorm labels
+      const offsets = [[0, -15], [15, 0], [0, 15], [-15, 0], [10, -10], [-10, 10]];
+      const offset = offsets[i % 6];
+      const m=pin(r.pos,label,u.color,!active||n===0,true,"dorm",offset).addTo(gDorm);
+      m.bindPopup(popup(r));
+      m.bindTooltip(`${r.name} · ${fmt(n)} ${state.pop==="foreign"?"foreign":
+        state.pop==="fulltime"?"full-time students":"reported residents"}`,{direction:"top"});
+
+      if(state.tier>=3 && state.layers.blocks && active){
+        const [la,lo]=r.pos;
+        ["A","B","C"].forEach((k,i)=>{
+          const a=la+.00045*(i%2), o=lo+.00060*Math.floor(i/2)-.00030;
+          L.rectangle([[a,o],[a+.00035,o+.00045]],
+            {color:u.color,weight:1,fillColor:u.color,fillOpacity:.22})
+            .bindTooltip(`Block ${k} · SCHEMATIC, not surveyed`,{sticky:true})
+            .addTo(gBlocks);
+        });
+      }
+    });
+  }
+
+  $("tierInfo").textContent =
+    `Tier ${state.tier} · z${z} · `+
+    (state.tier===1?"Campus overview":state.tier===2?"Hostel level":"Building level");
+  $("countInfo").textContent =
+    `${scopeRecords().filter(r=>Number.isFinite(count(r))&&count(r)>0).length} locations with published counts · dated reference`;
+}
+
+function renderPanel(){
+ const all=scopeRecords(), rs=all.filter(r=>state.kind!=="all"||state.site!=="all"||r.kind==="campus");
+ const known=rs.filter(r=>Number.isFinite(count(r)));
+ const estimates=known.filter(r=>r.estimated).length;
+ $("big").textContent=known.length?(estimates?"~":"")+fmt(known.reduce((sum,r)=>sum+count(r),0)):"Not verified";
+ $("scopeName").textContent=(state.pop==="foreign"?"International students":state.pop==="fulltime"?"Full-time students":"Published enrollment / residents")+" · "+(known.length<rs.length?"partial coverage · ":"")+(rs.every(r=>r.kind==="campus")?"2024 reference, not a live headcount":"mixed dated sources; see each location");
+ const missing=rs.length-known.length;
+ $("dataExplanation").hidden=!missing&&!estimates;
+ if(estimates&&!missing)$("dataExplanation").innerHTML=`<p>This total includes ${estimates} planning estimate${estimates===1?"":"s"}, marked with ~. Published counts are kept where available. These housing assumptions have not been independently verified.</p><button onclick="showEnrollment()">View published university enrollment</button>`;
+ if(missing){
+  const reason=state.pop==="fulltime" && rs.some(r=>r.kind!=="campus")
+   ? "Full-time enrollment is published for universities, not individual dorms or rental areas. Select Everyone to see available dorm occupancy."
+   : rs.every(r=>r.kind==="rental")
+    ? "No reliable resident counts were found for these rental areas. University enrollment cannot establish how many students live here."
+    : "Published occupancy is available for KSMU dorms 1–6 (1 Jan 2026). Counts for the other dorms have not been verified.";
+  $("dataExplanation").innerHTML=`<p>${known.length?`${known.length} of ${rs.length} locations have a published figure. The displayed total includes those locations only. `:""}${reason} Missing figures do not mean zero residents.</p><button onclick="showEnrollment()">View published university enrollment</button>`;
+ }
+ $("splitBar").innerHTML="";
+ $("splitLegend").innerHTML='<p class="popMeta">Enrollment belongs to the whole university. Dorm residents overlap with enrollment; do not add the two.</p>';
+ const campus=rs.filter(r=>r.kind==="campus");
+ $("housing").innerHTML=campus.length?`<span>Full-time enrollment</span><b>${fmt(campus.reduce((sum,r)=>sum+r.fullTime,0))}</b><span>International enrollment</span><b>${fmt(campus.reduce((sum,r)=>sum+r.foreign,0))}</b>`:"";
+ $("natTable").innerHTML='<tr><td>Country counts are not verified. Housing estimates are marked with ~ and are separate from published figures.</td></tr>';
+ $("siteTable").innerHTML=rs.map(r=>`<tr><td colspan="2"><button class="population-location" onclick="focusSite('${r.id}')">${r.name}</button>${populationDetails(r)}</td></tr>`).join("");
+}
+
+function showEnrollment(){
+ Object.assign(state,{kind:"campus",site:"all",pop:"all",nat:"all"});
+ document.querySelectorAll("#fPop button").forEach(button=>button.classList.toggle("on",button.dataset.v==="all"));
+ refresh();
+}
+window.showEnrollment=showEnrollment;
+
+function render(){ renderMap(); renderPanel(); }
+
+function fill(id,options,value){
+  $(id).innerHTML=options.map(o=>`<option value="${o.v}">${o.t}</option>`).join("");
+  $(id).value=value;
+}
+function syncSelects(){
+  $("fKind").value=state.kind;
+  fill("fUni",[{v:"all",t:"All universities"},
+    ...UNIS.map(u=>({v:u.id,t:u.name}))],state.uni);
+
+  let sites=RECORDS.filter(r=>(state.uni==="all"||r.uni===state.uni)
+                           &&(state.kind==="all"||r.kind===state.kind));
+  fill("fSite",[{v:"all",t:"All matching locations"},
+    ...sites.map(r=>({v:r.id,t:r.name+(r.kind==="dorm"?` (H${r.number})`:"")}))],state.site);
+
+  const codes=[...new Set(RECORDS.filter(r=>state.uni==="all"||r.uni===state.uni)
+    .flatMap(r=>Object.keys(r.countries)))];
+  fill("fNat",[{v:"all",t:"All nationalities"},
+    ...codes.map(c=>({v:c,t:NAMES[c]||c}))].sort((a,b)=>
+      a.v==="all"?-1:b.v==="all"?1:a.t.localeCompare(b.t)),state.nat);
+
+  fill("calSite",RECORDS.map(r=>({v:r.id,t:r.name})),state.site);
+  $("fNat").disabled = true;
+}
+function refresh(){ syncSelects(); render(); }
+
+$("fUni").onchange=e=>{state.uni=e.target.value;state.site="all";refresh();};
+$("fKind").onchange=e=>{state.kind=e.target.value;state.site="all";refresh();};
+$("fSite").onchange=e=>{
+  state.site=e.target.value;
+  if(state.site!=="all"){
+    const r=byId(state.site); state.uni=r.uni;
+    if(r.mapChecked)map.flyTo(r.pos,Math.max(map.getZoom(),16),{duration:.7});
+  }
+  refresh();
+};
+$("fNat").onchange=e=>{state.nat=e.target.value;if(state.nat!=="all")state.pop="foreign";
+  document.querySelectorAll("#fPop button").forEach(b=>b.classList.toggle("on",b.dataset.v===state.pop));
+  refresh();};
+
+document.querySelectorAll("#fPop button").forEach(b=>b.onclick=()=>{
+  state.pop=b.dataset.v; state.nat="all";
+  document.querySelectorAll("#fPop button").forEach(x=>x.classList.toggle("on",x===b));
+  refresh();
+});
+
+$("reset").onclick=()=>{Object.assign(state,{uni:"all",kind:"all",site:"all",pop:"all",nat:"all"});
+  document.querySelectorAll("#fPop button").forEach(x=>x.classList.toggle("on",x.dataset.v==="all"));
+  refresh();};
+$("fit").onclick=()=>{
+  const rs=scopeRecords().filter(r=>r.mapChecked); if(!rs.length){$("tierInfo").textContent="No map-checked locations in this scope.";return;}
+  map.fitBounds(L.latLngBounds(rs.map(r=>r.pos)).pad(.25));
+};
+
+[["lCampus","campus"],["lDorm","dorm"],["lRental","rental"],
+ ["lLabels","labels"],["lBlocks","blocks"],["lMalls","malls"]].forEach(([id,key])=>{
+  $(id).onchange=e=>{state.layers[key]=e.target.checked;render();};
+});
+
+map.on("zoomend",renderMap);
+
+const panel = document.getElementById('panel');
+const toggleBtn = document.getElementById('togglePanel');
+toggleBtn.onclick = () => {
+    panel.classList.toggle('hidden');
+    toggleBtn.classList.toggle('shifted');
+    toggleBtn.textContent = panel.classList.contains('hidden') ? 'Open panel' : 'Close panel';
+    document.body.classList.toggle('map-expanded',panel.classList.contains('hidden'));
+    toggleBtn.setAttribute('aria-expanded',String(!panel.classList.contains('hidden')));
+    setTimeout(() => map.invalidateSize(), 350);
+};
+
+let calibrating=false;
+$("calOn").onclick=()=>{
+  if(state.site==="all"){alert("Choose a specific location in section 01 first.");return;}
+  calibrating=true; map.getContainer().style.cursor="crosshair";
+  $("tierInfo").textContent="CALIBRATION · click the map to place "+byId(state.site).name;
+};
+$("calOff").onclick=()=>{calibrating=false;map.getContainer().style.cursor="";renderMap();};
+map.on("click",e=>{
+  if(!calibrating||state.site==="all")return;
+  overrides[state.site]=[+e.latlng.lat.toFixed(6),+e.latlng.lng.toFixed(6)];
+  const r=byId(state.site); r.pos=overrides[state.site];
+  localStorage.setItem("kursk_pins",JSON.stringify(overrides));
+  calibrating=false;map.getContainer().style.cursor="";render();
+  alert("Pin saved. Update the UNIS array in the file to make this permanent.");
+});
+$("resetCal").onclick=()=>{
+  if(!confirm("Reset all calibrated pins?"))return;
+  overrides={};localStorage.removeItem("kursk_pins");
+  RECORDS.forEach(r=>{
+    const u=uniOf(r.uni);
+    r.pos = r.kind==="campus"?u.campus.slice()
+      : r.kind==="dorm"?u.dorms.find(d=>String(d.n)===r.id.split("-d")[1]).pos.slice()
+      : CLUSTERS.find(c=>c.id===r.cluster).pos.slice();
+  });
+  render();
+};
+function download(name,text,type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$("exportJson").onclick=()=>download("kursk_student_data.json",
+  JSON.stringify({generated:new Date().toISOString(),
+    caveat:"Enrollment: 2024 data from 2025 official monitoring. KSMU dorms: 1 Jan 2026. Missing housing counts use explicitly labeled planning estimates. University-wide enrollment is not building attendance.",
+    universities:UNIS,records:RECORDS,pinOverrides:overrides},null,2),"application/json");
+
+$("importJson").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{
+    const d=JSON.parse(rd.result);
+    if(d.pinOverrides){overrides=d.pinOverrides;
+      localStorage.setItem("kursk_pins",JSON.stringify(overrides));
+      Object.entries(overrides).forEach(([id,p])=>{const r=byId(id);if(r)r.pos=p;});
+      render();alert("Pins imported.");}
+    else alert("No pinOverrides found in this file.");
+  }catch(err){alert("Invalid JSON.");}};
+  rd.readAsText(f);
+};
+
+$("csv").onclick=()=>{
+ const rows=[["id","university","type","name","address","enrollment_or_residents","international_students","full_time","reporting_period","scope","source","data_quality"]];
+ scopeRecords().forEach(r=>rows.push([r.id,r.uni,r.kind,r.name,r.address,r.occ??"",r.foreign??"",r.fullTime??"",r.populationDate,r.populationScope,r.populationSource??"",r.estimated?"planning_estimate":r.populationSource?"published":"unknown"]));
+ download("kursk_published_figures.csv",rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"),"text/csv");
+};
+
+$("png").onclick=async()=>{
+  const btn=$("png");btn.textContent="Rendering…";btn.disabled=true;
+  try{
+    await new Promise(res=>setTimeout(res,600));
+    const canvas=await html2canvas(document.getElementById("map"),{useCORS:true,allowTaint:false,
+      backgroundColor:"#ffffff",scale:2,logging:false});
+    const a=document.createElement("a");
+    a.download="kursk_student_map.png";a.href=canvas.toDataURL("image/png");a.click();
+  }catch(err){
+    alert("PNG export was blocked by tile CORS. Use your browser's screenshot tool, or serve this file over HTTP.");
+  }finally{btn.textContent="Export PNG";btn.disabled=false;}
+};
+
+refresh();
+L.control.scale({imperial:false}).addTo(map);
+</script>
+<script src="./tracker.js"></script>
+</body>
+</html>
