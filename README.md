@@ -30,6 +30,28 @@ Use a Node host with a persistent disk and HTTPS. Set:
 
 Start command: `npm start`. GitHub Pages cannot run this server or enforce leader-only writes. Do not commit `.env`, passwords, or the `data` directory. Back up the database with SQLite's backup mechanism or stop the server before copying the entire data directory. Keep the existing original file in version control for review before replacing a live deployment.
 
+## Deploy from GitHub to Render
+
+The included `render.yaml` provisions a paid Starter Node web service and a
+1 GB persistent disk for SQLite. Review Render's displayed charges before
+creating the service; the free service cannot preserve this database.
+
+1. Commit and push `render.yaml` to GitHub.
+2. Sign in at https://dashboard.render.com and choose **New > Blueprint**.
+3. Connect GitHub and select `Timereigth54/evanKursk`.
+4. Render reads `render.yaml`. Set `LEADER_PASSWORD` to a unique password of
+   at least 16 characters, review the resources and price, and deploy.
+   Enter the password only in Render, never in GitHub or chat.
+5. Open the HTTPS URL on the deployed service's page. Public viewing requires
+   no login; leaders use the shared password to save updates.
+
+The Blueprint configures the Node version, public network binding, HTTPS
+cookies, public origin, and persistent data directory. If you later use a
+custom domain, change `PUBLIC_ORIGIN` to its exact HTTPS origin.
+After deployment, save an update and verify it from another browser, then
+restart the service and confirm the update remains. Restarting signs leaders
+out, but preserves saved activity on the disk.
+
 ## Presentation check
 
 1. Open the public URL in a private window: no login required to view; editor is hidden.

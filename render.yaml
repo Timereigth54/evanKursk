@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: evankursk
+    runtime: node
+    plan: starter
+    buildCommand: node --version
+    startCommand: npm start
+    healthCheckPath: /api/session
+    disk:
+      name: prayer-map-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.16.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /var/data
+      - key: LEADER_PASSWORD
+        sync: false
+      - key: PUBLIC_ORIGIN
+        fromService:
+          name: evankursk
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
